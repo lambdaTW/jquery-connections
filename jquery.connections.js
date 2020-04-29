@@ -70,17 +70,17 @@
     var connection = $("<" + tag + "/>", options).css(css);
     connection.appendTo(container);
 
-    var border_w = (connection.outerWidth() - connection.innerWidth()) / 2;
-    var border_h = (connection.outerHeight() - connection.innerHeight()) / 2;
+    var sum_border_width = (connection.outerWidth() - connection.innerWidth()) / 2;
+    var sum_border_height = (connection.outerHeight() - connection.innerHeight()) / 2;
 
-    if (border_w <= 0 && border_h <= 0) {
-      border_w = border_h = 1;
+    if (sum_border_width <= 0 && sum_border_height <= 0) {
+      sum_border_width = sum_border_height = 1;
     }
 
     var data = {
       borderClasses: borderClasses,
-      border_h: border_h,
-      border_w: border_w,
+      sum_border_height: sum_border_height,
+      sum_border_width: sum_border_width,
       node_from: $(nodes[0]),
       node_to: $(nodes[1]),
       nodes_dom: nodes,
@@ -142,97 +142,167 @@
   };
 
   var update = function(connection) {
+    const hidden = 0
+    const show = 1
     var data = $.data(connection, "connection");
     getState(data);
     if (data.unmodified) {
       return;
     }
-    var border_h = data.border_h;
-    var border_w = data.border_w;
+    var sum_border_height = data.sum_border_height;
+    var sum_border_width = data.sum_border_width;
     var from = data.rect_from;
     var to = data.rect_to;
-    var b = (from.bottom + from.top) / 2;
-    var r = (to.left + to.right) / 2;
-    var t = (to.bottom + to.top) / 2;
-    var l = (from.left + from.right) / 2;
+    var from_y_middle = (from.bottom + from.top) / 2; // from-container's vertical middle
+    var to_x_middle = (to.left + to.right) / 2; // to-container's horizontal middle
+    var to_y_middle = (to.bottom + to.top) / 2; // to-container's vertical middle
+    var from_x_middle = (from.left + from.right) / 2; // from-container's horizontal middle
 
-    var h = ["right", "left"];
-    if (l > r) {
-      h = ["left", "right"];
-      var x = Math.max(r - border_w / 2, Math.min(from.right, to.right));
-      r = l + border_w / 2;
-      l = x;
-    } else {
-      l -= border_w / 2;
-      r = Math.min(r + border_w / 2, Math.max(from.left, to.left));
+    // from -- to |=> [hidden: "right", show: "left"]
+    // to -- from |=> [hidden: "left", show: "right"]
+    var horizontal = ["right", "left"];
+    if (from_x_middle > to_x_middle) { // from-container on to-container's right
+      horizontal = ["left", "right"];
+      var new_from_x_middle = Math.max(
+          to_x_middle - sum_border_width / 2,
+          Math.min(from.right, to.right)
+      );
+      to_x_middle = from_x_middle + sum_border_width / 2;
+      from_x_middle = new_from_x_middle;
+    } else {                 // **to-container on from-container's right
+      from_x_middle -= sum_border_width / 2;
+      to_x_middle = Math.min(
+          to_x_middle + sum_border_width / 2,
+          Math.max(from.left, to.left)
+      );
     }
-    var v = ["bottom", "top"];
-    if (t > b) {
-      v = ["top", "bottom"];
-      var x = Math.max(b - border_h / 2, Math.min(from.bottom, to.bottom));
-      b = t + border_h / 2;
-      t = x;
-    } else {
-      b = Math.min(b, Math.max(from.top, to.top));
-      t -= border_h / 2;
+    /*
+      from                            | to
+      to                              | from
+      [hidden: "top", show: "bottom"] | [hidden: "bottom", show: "top"]
+    */
+    var vertical = ["bottom", "top"];
+    if (to_y_middle > from_y_middle) { // **to-container on from-container's bottom
+      vertical = ["top", "bottom"];
+      var new_to_y_middle = Math.max(
+          from_y_middle - sum_border_height / 2,
+          Math.min(from.bottom, to.bottom)
+      );
+      from_y_middle = to_y_middle + sum_border_height / 2;
+      to_y_middle = new_to_y_middle;
+    } else {                    // from-container on to-container's bottom
+      from_y_middle = Math.min(
+          from_y_middle,
+          Math.max(from.top, to.top)
+      );
+      to_y_middle -= sum_border_height / 2;
     }
-    var width = r - l;
-    var height = b - t;
-    if (width < border_w) {
-      t = Math.max(t, Math.min(from.bottom, to.bottom));
-      b = Math.min(b, Math.max(from.top, to.top));
-      l = Math.max(from.left, to.left);
-      r = Math.min(from.right, to.right);
-      r = l = (l + r - border_w) / 2;
+    var width = to_x_middle - from_x_middle;
+    var height = from_y_middle - to_y_middle;
+    if (width < sum_border_width) { // width of nodes distance less than conn border
+      to_y_middle = Math.max(
+          to_y_middle,
+          Math.min(from.bottom, to.bottom)
+      );
+      from_y_middle = Math.min(
+          from_y_middle,
+          Math.max(from.top, to.top)
+      );
+      from_x_middle = Math.max(from.left, to.left);
+      to_x_middle = Math.min(from.right, to.right);
+      to_x_middle = from_x_middle = (
+          from_x_middle + to_x_middle - sum_border_width
+      ) / 2;
     }
-    if (height < border_h) {
-      l = Math.max(l, Math.min(from.right, to.right));
-      r = Math.min(r, Math.max(from.left, to.left));
-      t = Math.max(from.top, to.top);
-      b = Math.min(from.bottom, to.bottom);
-      b = t = (t + b - border_h) / 2;
+    if (height < sum_border_height) { // height of nodes distance less than conn border
+      from_x_middle = Math.max(from_x_middle, Math.min(from.right, to.right));
+      to_x_middle = Math.min(to_x_middle, Math.max(from.left, to.left));
+      to_y_middle = Math.max(from.top, to.top);
+      from_y_middle = Math.min(from.bottom, to.bottom);
+      from_y_middle = to_y_middle = (to_y_middle + from_y_middle - sum_border_height) / 2;
     }
-    width = r - l;
-    height = b - t;
-    width <= 0 && (border_h = 0);
-    height <= 0 && (border_w = 0);
+    width = to_x_middle - from_x_middle;
+    height = from_y_middle - to_y_middle;
+    width <= 0 && (sum_border_height = 0);
+    height <= 0 && (sum_border_width = 0);
     var style =
       "border-" +
-      v[0] +
+      vertical[hidden] +             // "bottom" or "top"
       "-" +
-      h[0] +
+      horizontal[hidden] +           // "left" or "right"
       "-radius: 0;" +
       "border-" +
-      v[0] +
+      vertical[hidden] +             // "bottom" or "top"
       "-" +
-      h[1] +
+      horizontal[show] +           // "left" or "right"
       "-radius: 0;" +
       "border-" +
-      v[1] +
+      vertical[show] +             // "bottom" or "top"
       "-" +
-      h[0] +
+      horizontal[hidden] +           // "left" or "right"
       "-radius: 0;";
-    (border_h <= 0 || border_w <= 0) &&
-      (style += "border-" + v[1] + "-" + h[1] + "-radius: 0;");
+    /*
+      style is
+      border-bottom-radius: 0;
+      border-top-radius: 0;
+      border-left-radius: 0;
+      border-right-radius: 0;
+     */
+    (sum_border_height <= 0 || sum_border_width <= 0) &&
+      (style += "border-" + vertical[show] + "-" + horizontal[show] + "-radius: 0;");
     if (data.hidden) {
       style += "display: none;";
     } else {
-      data.css["border-" + v[0] + "-width"] = 0;
-      data.css["border-" + h[0] + "-width"] = 0;
-      data.css["border-" + v[1] + "-width"] = border_h;
-      data.css["border-" + h[1] + "-width"] = border_w;
+      /* When from Set border-top-width: 0
+               |
+               v
+               to
+      */
+      data.css["border-" + vertical[hidden] + "-width"] = 0;
+      /* When from -> to
+         Set border-right-width: 0
+      */
+      data.css["border-" + horizontal[hidden] + "-width"] = 0;
+      /*
+        hidden: right, top
+        from      | border-top-width: 0
+         │        | border-bottom-width: sum_border_height
+         │        | border-right-width: 0
+         └───>to  | border-left-width: sum_border_width
+
+        hidden: left, bottom
+        to<────┐  | border-top-width: sum_border_height
+               │  | border-bottom-width: 0
+               │  | border-right-width: sum_border_width
+             from | border-left-width: 0
+
+        hidden: right, bottom
+        ┌─────>to | border-top-width: sum_border_height
+        │         | border-bottom-width: 0
+        │         | border-right-width: 0
+        from      | border-left-width: sum_border_width
+
+        hidden: left, top
+             from | border-top-width: sum_border_height
+              │   | border-bottom-width: 0
+              │   | border-right-width: 0
+       to<────┘   | border-left-width: sum_border_width
+       */
+
+      data.css["border-" + vertical[show] + "-width"] = sum_border_height;
+      data.css["border-" + horizontal[show] + "-width"] = sum_border_width;
       var current_rect = connection.getBoundingClientRect();
-      data.css.left = connection.offsetLeft + l - current_rect.left;
-      data.css.top = connection.offsetTop + t - current_rect.top;
-      data.css.width = width - border_w;
-      data.css.height = height - border_h;
+      data.css.left = connection.offsetLeft + from_x_middle - current_rect.left;
+      data.css.top = connection.offsetTop + to_y_middle - current_rect.top;
+      data.css.width = width - sum_border_width;
+      data.css.height = height - sum_border_height;
     }
     var bc = data.borderClasses;
     $(connection)
-      .removeClass(bc[v[0]])
-      .removeClass(bc[h[0]])
-      .addClass(bc[v[1]])
-      .addClass(bc[h[1]])
+      .removeClass(bc[vertical[hidden]])
+      .removeClass(bc[horizontal[hidden]])
+      .addClass(bc[vertical[show]])
+      .addClass(bc[horizontal[show]])
       .attr("style", style)
       .css(data.css);
   };
